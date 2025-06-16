@@ -1,26 +1,36 @@
 import os
 from dotenv import load_dotenv
-from nicegui import ui
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from app import create_app
 
-# Import the page definitions from app.main
-# This ensures that the @ui.page decorators in app/main.py are executed
-# and the routes are registered with NiceGUI before ui.run() is called.
-import app.main  # noqa: F401 -> Ensure app.main is imported to register pages
-
-# Load environment variables from .env file (if present)
+# Load environment variables
 load_dotenv()
 
-if __name__ in {"__main__", "__mp_main__"}: # Recommended by NiceGUI for multiprocessing compatibility
-    port = int(os.getenv("PORT", 8000))
-    host = os.getenv("HOST", "0.0.0.0") # Fly.io expects 0.0.0.0
+# Create FastAPI application
+app = create_app()
 
-    # title and favicon can be set here or in app.main using ui.run(title=..., favicon=...)
-    # uvicorn_logging_level='warning' helps to reduce log noise in production
-    # reload=False is important for production deployments like Fly.io
-    ui.run(
-        host=host,
-        port=port,
-        title="My NiceGUI App",
-        uvicorn_logging_level='info', # Can be 'warning' or 'error' for less verbosity
-        reload=False # IMPORTANT: Set to False for production/deployment
-    )
+# Configure CORS for frontend communication
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Restrict in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Serve static files (React build)
+if os.path.exists("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "service": "color-suggestion-api"}
+
+# Start the application
+if __name__ == '__main__':
+    import uvicorn
+    port = int(os.environ.get('PORT', 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
